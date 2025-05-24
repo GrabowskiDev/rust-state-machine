@@ -21,24 +21,28 @@ impl StateMachine {
 }
 
 struct MyApp {
-    alphabet: String,
-    states: String,
-    start_state: String,
-    accept_states: String,
-    transitions: String,
-    test_input: String,
+    num_rows: usize,
+    num_columns: usize,
+    alphabet_cells: Vec<String>,
+    state_names: Vec<String>,
+    transitions: Vec<Vec<String>>,
+    accepting_states: Vec<bool>,
+    input_string: String,
     result: Option<bool>,
 }
 
 impl Default for MyApp {
     fn default() -> Self {
+        let num_columns = 2; // Minimum 2 columns for alphabet and one for states
+        let num_rows = 2; // Minimum 2 rows for states and one for alphabet
         Self {
-            alphabet: String::new(),
-            states: String::new(),
-            start_state: String::new(),
-            accept_states: String::new(),
-            transitions: String::new(),
-            test_input: String::new(),
+            num_rows: 2,
+            num_columns: 2,
+            alphabet_cells: vec!["a".to_string(); num_columns - 1],
+            state_names: vec!["q0".to_string(); num_rows - 1],
+            transitions: vec![vec!["".to_string(); num_columns - 1]; num_rows - 1],
+            accepting_states: vec![false; num_rows - 1],
+            input_string: String::new(),
             result: None,
         }
     }
@@ -47,55 +51,93 @@ impl Default for MyApp {
 impl eframe::App for MyApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ctx, |ui| {
-            ui.heading("Maszyna stanów");
-
-            ui.label("Alfabet (np. a,b,c):");
-            ui.text_edit_singleline(&mut self.alphabet);
-
-            ui.label("Stany (np. q0,q1,q2):");
-            ui.text_edit_singleline(&mut self.states);
-
-            ui.label("Stan początkowy:");
-            ui.text_edit_singleline(&mut self.start_state);
-
-            ui.label("Stany akceptujące (np. q2):");
-            ui.text_edit_singleline(&mut self.accept_states);
-
-            ui.label("Przejścia (np. q0,a,q1; q1,b,q2):");
-            ui.text_edit_multiline(&mut self.transitions);
-
-            ui.separator();
-
-            ui.label("Ciąg do sprawdzenia:");
-            ui.text_edit_singleline(&mut self.test_input);
-
-            if ui.button("Sprawdź").clicked() {
-                let transitions = self.transitions
-                    .split(';')
-                    .filter_map(|t| {
-                        let parts: Vec<_> = t.trim().split(',').collect();
-                        if parts.len() == 3 {
-                            Some(((parts[0].trim().to_string(), parts[1].trim().chars().next().unwrap()), parts[2].trim().to_string()))
-                        } else {
-                            None
-                        }
-                    })
-                    .collect();
-
-                let sm = StateMachine {
-                    transitions,
-                    start_state: self.start_state.trim().to_string(),
-                    accept_states: self.accept_states.split(',').map(|s| s.trim().to_string()).collect(),
-                };
-
-                self.result = Some(sm.run(&self.test_input));
+            // Obsługa dodawania/odejmowania kolumn i wierszy
+            if ui.button("Dodaj znak alfabetu").clicked() {
+                self.num_columns += 1;
+                self.alphabet_cells.push("".to_string());
+                for row in &mut self.transitions {
+                    row.push("".to_string());
+                }
+            }
+            if ui.button("Dodaj stan").clicked() {
+                self.num_rows += 1;
+                self.state_names.push("".to_string());
+                self.transitions.push(vec!["".to_string(); self.num_columns - 1]);
+                self.accepting_states.push(false);
+            }
+            if ui.button("Usuń znak alfabetu").clicked() && self.num_columns > 2 {
+                self.num_columns -= 1;
+                self.alphabet_cells.pop();
+                for row in &mut self.transitions {
+                    row.pop();
+                }
+            }
+            if ui.button("Usuń stan").clicked() && self.num_rows > 2 {
+                self.num_rows -= 1;
+                self.state_names.pop();
+                self.transitions.pop();
+                self.accepting_states.pop();
             }
 
+            // Wyświetlanie siatki
+            let grid_size = egui::vec2(60.0 * self.num_columns as f32, 60.0 * self.num_rows as f32);
+            ui.allocate_ui(grid_size, |ui| {
+                egui::Grid::new("my_grid")
+                    .min_col_width(60.0)
+                    .show(ui, |ui| {
+                        for row in 0..self.num_rows {
+                            for col in 0..=self.num_columns { // +1 kolumna na checkbox
+                                if row == 0 && col == 0 {
+                                    ui.label("Akcept.");
+                                } else if row == 0 && col == 1 {
+                                    ui.label("Stany");
+                                } else if row == 0 {
+                                    // Edytowalny znak alfabetu
+                                    let cell = &mut self.alphabet_cells[col - 2];
+                                    if ui.text_edit_singleline(cell).changed() {
+                                        if cell.chars().count() > 1 {
+                                            let c = cell.chars().next().unwrap();
+                                            *cell = c.to_string();
+                                        }
+                                    }
+                                } else if col == 0 {
+                                    // Checkbox akceptujący
+                                    ui.checkbox(&mut self.accepting_states[row - 1], "");
+                                } else if col == 1 {
+                                    // Edytowalna nazwa stanu
+                                    ui.text_edit_singleline(&mut self.state_names[row - 1]);
+                                } else {
+                                    // Edytowalne przejście
+                                    ui.text_edit_singleline(&mut self.transitions[row - 1][col - 2]);
+                                }
+                            }
+                            ui.end_row();
+                        }
+                    });
+            });
+
+            ui.separator();
+            ui.horizontal(|ui| {
+                ui.label("Ciąg wejściowy:");
+                ui.text_edit_singleline(&mut self.input_string);
+                if ui.button("Sprawdź").clicked() {
+                    // Przykładowe wywołanie automatu (tu: zawsze false)
+                    // Zamień na własną logikę!
+                    let alphabet: Vec<char> = self.alphabet_cells.iter().filter_map(|s| s.chars().next()).collect();
+                    let transitions = HashMap::new(); // tutaj zbuduj na podstawie self.transitions
+                    let sm = StateMachine {
+                        transitions,
+                        start_state: self.state_names.get(0).cloned().unwrap_or_default(),
+                        accept_states: vec![], // uzupełnij według potrzeb
+                    };
+                    self.result = Some(sm.run(&self.input_string));
+                }
+            });
             if let Some(result) = self.result {
                 if result {
-                    ui.colored_label(egui::Color32::GREEN, "Ciąg akceptowany!");
+                    ui.colored_label(egui::Color32::GREEN, "Ciąg zaakceptowany");
                 } else {
-                    ui.colored_label(egui::Color32::RED, "Ciąg odrzucony.");
+                    ui.colored_label(egui::Color32::RED, "Ciąg odrzucony");
                 }
             }
         });
