@@ -121,14 +121,33 @@ impl eframe::App for MyApp {
                 ui.label("Ciąg wejściowy:");
                 ui.text_edit_singleline(&mut self.input_string);
                 if ui.button("Sprawdź").clicked() {
-                    // Przykładowe wywołanie automatu (tu: zawsze false)
-                    // Zamień na własną logikę!
+                    let mut names_accept_states = vec![];
+                    
+                    // Zbieranie nazw stanów akceptujących
+                    for( i, &accepting) in self.accepting_states.iter().enumerate() {
+                        if accepting {
+                            names_accept_states.push(self.state_names[i].clone());
+                        }
+                    };
+                    
                     let alphabet: Vec<char> = self.alphabet_cells.iter().filter_map(|s| s.chars().next()).collect();
-                    let transitions = HashMap::new(); // tutaj zbuduj na podstawie self.transitions
+                    let mut transitions_ready = HashMap::new();
+                    
+                    // Przygotowanie przejść
+                    for(i, name) in self.transitions.iter().enumerate(){
+                        for(j, transition) in name.iter().enumerate() {
+                            if !transition.is_empty() && j < alphabet.len() {
+                                transitions_ready.insert((self.state_names[i].clone(), alphabet[j]), transition.clone());
+                            }
+                        }
+                    }
+                    
+                    //TODO: CZEMU UZYWAMY STATEMACHINE ZDEFINIOWANEJ TUTAJ (na górze pliku) 
+                    //TODO: A NIE NASZEJ? XD
                     let sm = StateMachine {
-                        transitions,
+                        transitions: transitions_ready,
                         start_state: self.state_names.get(0).cloned().unwrap_or_default(),
-                        accept_states: vec![], // uzupełnij według potrzeb
+                        accept_states: names_accept_states, // uzupełnij według potrzeb
                     };
                     self.result = Some(sm.run(&self.input_string));
                 }
