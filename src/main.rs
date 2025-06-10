@@ -7,6 +7,13 @@ mod automats;
 use elements::Alphabet::Alphabet;
 use elements::Node::Node;
 use automats::DAS::DAS;
+use automats::ENAS::{ENAS, ENASNode};
+
+#[derive(PartialEq)]
+enum AutomatType {
+    DAS,
+    ENAS,
+}
 
 struct MyApp {
     num_rows: usize,
@@ -17,7 +24,8 @@ struct MyApp {
     accepting_states: Vec<bool>,
     input_string: String,
     result: Option<bool>,
-    validation_message: String, // Dodane pole na komunikaty walidacji
+    validation_message: String,
+    automat_type: AutomatType, // Dodane pole wyboru automatu
 }
 
 impl Default for MyApp {
@@ -33,7 +41,8 @@ impl Default for MyApp {
             accepting_states: vec![false; num_rows - 1],
             input_string: String::new(),
             result: None,
-            validation_message: String::new(), // Inicjalizacja
+            validation_message: String::new(),
+            automat_type: AutomatType::DAS,
         }
     }
 }
@@ -41,6 +50,14 @@ impl Default for MyApp {
 impl eframe::App for MyApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ctx, |ui| {
+            // Przełącznik typu automatu
+            ui.horizontal(|ui| {
+                ui.label("Typ automatu:");
+                ui.radio_value(&mut self.automat_type, AutomatType::DAS, "DAS");
+                ui.radio_value(&mut self.automat_type, AutomatType::ENAS, "ε-NAS");
+            });
+
+            // Przyciski do edycji tabeli
             if ui.button("Dodaj znak alfabetu").clicked() {
                 self.num_columns += 1;
                 self.alphabet_cells.push("".to_string());
@@ -51,7 +68,7 @@ impl eframe::App for MyApp {
             if ui.button("Dodaj stan").clicked() {
                 self.num_rows += 1;
                 self.state_names.push("".to_string());
-                self.transitions.push(vec!["".to_string(); self.num_columns - 1]);
+                self.transitions.push(vec!["".to_string(); self.num_columns - 1 + if matches!(self.automat_type, AutomatType::ENAS) { 1 } else { 0 }]);
                 self.accepting_states.push(false);
             }
             if ui.button("Usuń znak alfabetu").clicked() && self.num_columns > 2 {
@@ -68,31 +85,49 @@ impl eframe::App for MyApp {
                 self.accepting_states.pop();
             }
 
-            let grid_size = egui::vec2(60.0 * self.num_columns as f32, 60.0 * self.num_rows as f32);
+            // Wyznacz liczbę kolumn (dla ENAS +1 na epsilon)
+            let extra_epsilon = matches!(self.automat_type, AutomatType::ENAS);
+            let total_columns = self.num_columns - 1 + if extra_epsilon { 1 } else { 0 };
+
+            // Tabela stanów i przejść
+            let grid_size = egui::vec2(60.0 * (total_columns + 2) as f32, 60.0 * self.num_rows as f32);
             ui.allocate_ui(grid_size, |ui| {
                 egui::Grid::new("my_grid")
                     .min_col_width(60.0)
                     .show(ui, |ui| {
                         for row in 0..self.num_rows {
-                            for col in 0..=self.num_columns {
-                                if (row == 0 && col == 0) {
+                            for col in 0..=(total_columns + 1) {
+                                if row == 0 && col == 0 {
                                     ui.label("Akcept.");
-                                } else if (row == 0 && col == 1) {
+                                } else if row == 0 && col == 1 {
                                     ui.label("Stany");
-                                } else if (row == 0) {
-                                    let cell = &mut self.alphabet_cells[col - 2];
-                                    if ui.text_edit_singleline(cell).changed() {
-                                        if cell.chars().count() > 1 {
-                                            let c = cell.chars().next().unwrap();
-                                            *cell = c.to_string();
+                                } else if row == 0 {
+                                    // Nagłówki alfabetu i epsilon
+                                    if col >= 2 && col < 2 + self.num_columns - 1 {
+                                        let idx = col - 2;
+                                        let cell = &mut self.alphabet_cells[idx];
+                                        if ui.text_edit_singleline(cell).changed() {
+                                            if cell.chars().count() > 1 {
+                                                let c = cell.chars().next().unwrap();
+                                                *cell = c.to_string();
+                                            }
                                         }
+                                    } else if extra_epsilon && col == 2 + self.num_columns - 1 {
+                                        ui.label("ε");
                                     }
-                                } else if (col == 0) {
+                                } else if col == 0 {
                                     ui.checkbox(&mut self.accepting_states[row - 1], "");
-                                } else if (col == 1) {
+                                } else if col == 1 {
                                     ui.text_edit_singleline(&mut self.state_names[row - 1]);
                                 } else {
-                                    ui.text_edit_singleline(&mut self.transitions[row - 1][col - 2]);
+                                    // Przejścia
+                                    let tcol = col - 2;
+                                    if tcol < total_columns {
+                                        if self.transitions[row - 1].len() < total_columns {
+                                            self.transitions[row - 1].resize(total_columns, "".to_string());
+                                        }
+                                        ui.text_edit_singleline(&mut self.transitions[row - 1][tcol]);
+                                    }
                                 }
                             }
                             ui.end_row();
@@ -105,57 +140,140 @@ impl eframe::App for MyApp {
                 ui.label("Ciąg wejściowy:");
                 ui.text_edit_singleline(&mut self.input_string);
                 if ui.button("Sprawdź").clicked() {
-                    // 1. Budowa alfabetu
-                    let mut alphabet = Alphabet::new();
-                    for s in &self.alphabet_cells {
-                        if let Some(c) = s.chars().next() {
-                            alphabet.add(c);
-                        }
-                    }
+                    self.result = None;
+                    self.validation_message.clear();
 
-                    // 2. Budowa stanów
-                    let mut nodes = vec![];
-                    for (i, name) in self.state_names.iter().enumerate() {
-                        let mut node = Node::new(name, self.accepting_states[i]);
-                        for (j, cell) in self.transitions[i].iter().enumerate() {
-                            if !cell.is_empty() {
-                                if let Some(symbol) = self.alphabet_cells[j].chars().next() {
-                                    node.add_connection(symbol, cell);
+                    match self.automat_type {
+                        AutomatType::DAS => {
+                            // 1. Budowa alfabetu
+                            let mut alphabet = Alphabet::new();
+                            for s in &self.alphabet_cells {
+                                if let Some(c) = s.chars().next() {
+                                    alphabet.add(c);
                                 }
                             }
+
+                            // 2. Budowa stanów
+                            let mut nodes = vec![];
+                            for (i, name) in self.state_names.iter().enumerate() {
+                                let mut node = Node::new(name, self.accepting_states[i]);
+                                for (j, cell) in self.transitions[i].iter().enumerate().take(self.num_columns - 1) {
+                                    if !cell.is_empty() {
+                                        if let Some(symbol) = self.alphabet_cells[j].chars().next() {
+                                            node.add_connection(symbol, cell);
+                                        }
+                                    }
+                                }
+                                nodes.push(node);
+                            }
+
+                            // 3. Budowa DAS
+                            let mut das = DAS::new(alphabet);
+                            for node in nodes {
+                                das.add_state(node);
+                            }
+                            if let Some(start) = self.state_names.get(0) {
+                                das.set_start_state(start);
+                            }
+
+                            // --- WALIDACJA DAS ---
+                            let mut errors = das.validate();
+
+                            // Sprawdź, czy ciąg wejściowy zawiera tylko znaki z alfabetu
+                            for c in self.input_string.chars() {
+                                if !das.alphabet.contains(&c) {
+                                    errors.push(format!(
+                                        "Ciąg wejściowy zawiera znak '{}' spoza alfabetu.",
+                                        c
+                                    ));
+                                }
+                            }
+
+                            if !errors.is_empty() {
+                                self.result = None;
+                                self.validation_message = errors.join("\n");
+                            } else {
+                                // 4. Sprawdzenie ciągu
+                                self.result = Some(das.process(&self.input_string));
+                                self.validation_message.clear();
+                            }
                         }
-                        nodes.push(node);
-                    }
+                        AutomatType::ENAS => {
+                            // 1. Budowa alfabetu (bez epsilon)
+                            let mut alphabet = Alphabet::new();
+                            for s in &self.alphabet_cells {
+                                if let Some(c) = s.chars().next() {
+                                    alphabet.add(c);
+                                }
+                            }
 
-                    // 3. Budowa DAS
-                    let mut das = DAS::new(alphabet);
-                    for node in nodes {
-                        das.add_state(node);
-                    }
-                    if let Some(start) = self.state_names.get(0) {
-                        das.set_start_state(start);
-                    }
+                            // 2. Budowa stanów ENAS
+                            let mut nodes = vec![];
+                            for (i, name) in self.state_names.iter().enumerate() {
+                                let mut node = ENASNode::new(name, self.accepting_states[i]);
+                                // Przejścia dla alfabetu
+                                for (j, cell) in self.transitions[i].iter().enumerate().take(self.num_columns - 1) {
+                                    if !cell.trim().is_empty() {
+                                        if let Some(symbol) = self.alphabet_cells[j].chars().next() {
+                                            let targets: Vec<String> = cell
+                                                .split(',')
+                                                .map(|s| s.trim().to_string())
+                                                .filter(|s| !s.is_empty())
+                                                .collect();
+                                            if !targets.is_empty() {
+                                                node.add_connection(symbol, targets);
+                                            }
+                                        }
+                                    }
+                                }
+                                // Przejście epsilon (ostatnia kolumna)
+                                if self.transitions[i].len() > self.num_columns - 1 {
+                                    let cell = &self.transitions[i][self.num_columns - 1];
+                                    if !cell.trim().is_empty() {
+                                        let targets: Vec<String> = cell
+                                            .split(',')
+                                            .map(|s| s.trim().to_string())
+                                            .filter(|s| !s.is_empty())
+                                            .collect();
+                                        if !targets.is_empty() {
+                                            node.add_connection('ε', targets);
+                                        }
+                                    }
+                                }
+                                nodes.push(node);
+                            }
 
-                    // --- WALIDACJA DAS ---
-                    let mut errors = das.validate();
+                            // 3. Budowa ENAS
+                            let mut enas = ENAS::new(alphabet);
+                            for node in nodes {
+                                enas.add_state(node);
+                            }
+                            if let Some(start) = self.state_names.get(0) {
+                                enas.set_start_state(start);
+                            }
 
-                    // Sprawdź, czy ciąg wejściowy zawiera tylko znaki z alfabetu
-                    for c in self.input_string.chars() {
-                        if !das.alphabet.contains(&c) {
-                            errors.push(format!(
-                                "Ciąg wejściowy zawiera znak '{}' spoza alfabetu.",
-                                c
-                            ));
+                            // --- WALIDACJA ENAS ---
+                            let mut errors = enas.validate();
+
+                            // Sprawdź, czy ciąg wejściowy zawiera tylko znaki z alfabetu
+                            for c in self.input_string.chars() {
+                                if !enas.alphabet.contains(&c) {
+                                    errors.push(format!(
+                                        "Ciąg wejściowy zawiera znak '{}' spoza alfabetu.",
+                                        c
+                                    ));
+                                }
+                            }
+
+                            if !errors.is_empty() {
+                                self.result = None;
+                                self.validation_message = errors.join("\n");
+                            } else {
+                                // 4. Sprawdzenie ciągu
+                                self.result = Some(enas.process(&self.input_string));
+                                self.validation_message.clear();
+                            }
                         }
-                    }
-
-                    if !errors.is_empty() {
-                        self.result = None;
-                        self.validation_message = errors.join("\n");
-                    } else {
-                        // 4. Sprawdzenie ciągu
-                        self.result = Some(das.process(&self.input_string));
-                        self.validation_message.clear();
                     }
                 }
             });
