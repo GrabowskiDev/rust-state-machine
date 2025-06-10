@@ -42,13 +42,11 @@ impl DAS {
         self.states.get(&current).map_or(false, |n| n.is_accepting())
     }
 
-    /// Walidacja automatu DAS
     pub fn validate(&self) -> Vec<String> {
         let mut errors = Vec::new();
         let state_names: HashSet<_> = self.states.keys().cloned().collect();
         let alphabet_vec: Vec<char> = self.alphabet.alphabet.iter().cloned().collect();
 
-        // Sprawdź, czy wszystkie połączenia wskazują na istniejące stany
         for (state, node) in &self.states {
             for (_symbol, target) in node.get_connections() {
                 if !state_names.contains(target) {
@@ -60,7 +58,6 @@ impl DAS {
             }
         }
 
-        // Sprawdź, czy każdy stan ma połączenie dla każdego znaku alfabetu
         for (state, node) in &self.states {
             for &symbol in &alphabet_vec {
                 if !node.get_connections().contains_key(&symbol) {

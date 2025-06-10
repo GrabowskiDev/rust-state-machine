@@ -25,7 +25,7 @@ struct MyApp {
     input_string: String,
     result: Option<bool>,
     validation_message: String,
-    automat_type: AutomatType, // Dodane pole wyboru automatu
+    automat_type: AutomatType,
 }
 
 impl Default for MyApp {

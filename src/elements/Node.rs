@@ -3,7 +3,7 @@ use std::collections::HashMap;
 #[derive(Clone)]
 pub struct Node {
     name: String,
-    connections: HashMap<char, String>, // przechowuj nazwy stanów, nie Node
+    connections: HashMap<char, String>,
     accepting: bool,
 }
 

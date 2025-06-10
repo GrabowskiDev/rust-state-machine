@@ -11,7 +11,7 @@ pub struct ENAS {
 #[derive(Clone)]
 pub struct ENASNode {
     name: String,
-    connections: HashMap<char, Vec<String>>, // char -> lista stanów docelowych
+    connections: HashMap<char, Vec<String>>,
     accepting: bool,
 }
 
@@ -59,7 +59,6 @@ impl ENAS {
         self.start_state = name.to_string();
     }
 
-    /// Przetwarzanie wejścia przez ENAS (NFA z epsilon-przejściami)
     pub fn process(&self, input: &str) -> bool {
         let mut current_states = self.epsilon_closure(&[self.start_state.clone()]);
         for c in input.chars() {
@@ -78,7 +77,6 @@ impl ENAS {
         current_states.iter().any(|s| self.states.get(s).map_or(false, |n| n.is_accepting()))
     }
 
-    /// Zwraca domknięcie epsilon dla podanych stanów
     fn epsilon_closure(&self, states: &[String]) -> HashSet<String> {
         let mut closure: HashSet<String> = states.iter().cloned().collect();
         let mut queue: VecDeque<String> = states.iter().cloned().collect();
@@ -96,7 +94,6 @@ impl ENAS {
         closure
     }
 
-    /// Walidacja ENAS: sprawdza tylko, czy wszystkie połączenia prowadzą do istniejących stanów
     pub fn validate(&self) -> Vec<String> {
         let mut errors = Vec::new();
         let state_names: HashSet<_> = self.states.keys().cloned().collect();
