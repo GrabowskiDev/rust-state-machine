@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 pub struct Alphabet {
-    alphabet: HashSet<char>,
+    pub(crate) alphabet: HashSet<char>,
 }
 
 impl Alphabet {

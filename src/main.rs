@@ -17,6 +17,7 @@ struct MyApp {
     accepting_states: Vec<bool>,
     input_string: String,
     result: Option<bool>,
+    validation_message: String, // Dodane pole na komunikaty walidacji
 }
 
 impl Default for MyApp {
@@ -32,6 +33,7 @@ impl Default for MyApp {
             accepting_states: vec![false; num_rows - 1],
             input_string: String::new(),
             result: None,
+            validation_message: String::new(), // Inicjalizacja
         }
     }
 }
@@ -73,11 +75,11 @@ impl eframe::App for MyApp {
                     .show(ui, |ui| {
                         for row in 0..self.num_rows {
                             for col in 0..=self.num_columns {
-                                if row == 0 && col == 0 {
+                                if (row == 0 && col == 0) {
                                     ui.label("Akcept.");
-                                } else if row == 0 && col == 1 {
+                                } else if (row == 0 && col == 1) {
                                     ui.label("Stany");
-                                } else if row == 0 {
+                                } else if (row == 0) {
                                     let cell = &mut self.alphabet_cells[col - 2];
                                     if ui.text_edit_singleline(cell).changed() {
                                         if cell.chars().count() > 1 {
@@ -85,9 +87,9 @@ impl eframe::App for MyApp {
                                             *cell = c.to_string();
                                         }
                                     }
-                                } else if col == 0 {
+                                } else if (col == 0) {
                                     ui.checkbox(&mut self.accepting_states[row - 1], "");
-                                } else if col == 1 {
+                                } else if (col == 1) {
                                     ui.text_edit_singleline(&mut self.state_names[row - 1]);
                                 } else {
                                     ui.text_edit_singleline(&mut self.transitions[row - 1][col - 2]);
@@ -134,11 +136,36 @@ impl eframe::App for MyApp {
                         das.set_start_state(start);
                     }
 
-                    // 4. Sprawdzenie ciągu
-                    self.result = Some(das.process(&self.input_string));
+                    // --- WALIDACJA DAS ---
+                    let mut errors = das.validate();
+
+                    // Sprawdź, czy ciąg wejściowy zawiera tylko znaki z alfabetu
+                    for c in self.input_string.chars() {
+                        if !das.alphabet.contains(&c) {
+                            errors.push(format!(
+                                "Ciąg wejściowy zawiera znak '{}' spoza alfabetu.",
+                                c
+                            ));
+                        }
+                    }
+
+                    if !errors.is_empty() {
+                        self.result = None;
+                        self.validation_message = errors.join("\n");
+                    } else {
+                        // 4. Sprawdzenie ciągu
+                        self.result = Some(das.process(&self.input_string));
+                        self.validation_message.clear();
+                    }
                 }
             });
-            if let Some(result) = self.result {
+
+            // Wyświetlanie komunikatów walidacji lub wyniku
+            if !self.validation_message.is_empty() {
+                for line in self.validation_message.lines() {
+                    ui.colored_label(egui::Color32::RED, line);
+                }
+            } else if let Some(result) = self.result {
                 if result {
                     ui.colored_label(egui::Color32::GREEN, "Ciąg zaakceptowany");
                 } else {
