@@ -1,66 +1,44 @@
-mod automats;
+use crate::elements::Alphabet::Alphabet;
+use crate::elements::Node::Node;
+use std::collections::{HashMap, HashSet};
 
-struct DAS {
+pub struct DAS {
     alphabet: Alphabet,
-    state_names: HashSet<String>,
-    states: Vec<Node>,
-    current_state: Node,
-    start_state: Node,
+    states: HashMap<String, Node>,
+    start_state: String,
 }
-// ε
-impl Automat for DAS {
-    fn add_state(&mut self, state: &Node){
-        if self.state_names.contains(state.get_name()) {
-            panic!("State with name {} already exists", state.get_name());
-        }
-        if state.get_name().is_empty() {
-            panic!("State name cannot be empty");
-        }
 
-        connections = state.get_connections();
-        for key in connections.keys() {
-            if !self.alphabet.contains(key) {
-                panic!("Character {} not in alphabet", key);
-            }
+impl DAS {
+    pub fn new(alphabet: Alphabet) -> Self {
+        Self {
+            alphabet,
+            states: HashMap::new(),
+            start_state: String::new(),
         }
-
-        for state in connections.values() {
-            if !self.state_names.contains(state.get_name()) {
-                panic!("State {} doesn't exist", state.get_name());
-            }
-        }
-
-        self.states.push(state.clone());
     }
 
-    fn add_state_name(&mut self, name: &str){
-        if self.state_names.contains(name) {
-            panic!("State with name {} already exists", name);
-        }
-        if name.is_empty() {
-            panic!("State name cannot be empty");
-        }
-        self.state_names.insert(name.to_string());
-    }
-    
-    fn set_start_node(&mut self, state: &Node){
-        self.start_state = state.clone();
-        self.current_state = state.clone();
-    }
-    
-    fn get_current_state(&self) -> &Node{
-        &self.current_state
+    pub fn add_state(&mut self, node: Node) {
+        let name = node.get_name().to_string();
+        self.states.insert(name, node);
     }
 
-    fn process(&mut self, input: &str) -> bool{
-        let mut current_state = self.get_current_state();
-        for character in input.chars() {
-            if let Some(next_state) = current_state.get_next_state(character) {
-                current_state = next_state;
+    pub fn set_start_state(&mut self, name: &str) {
+        self.start_state = name.to_string();
+    }
+
+    pub fn process(&self, input: &str) -> bool {
+        let mut current = self.start_state.clone();
+        for c in input.chars() {
+            let node = match self.states.get(&current) {
+                Some(n) => n,
+                None => return false,
+            };
+            if let Some(next) = node.get_connections().get(&c) {
+                current = next.clone();
             } else {
                 return false;
             }
         }
-        current_state.is_accepting()
+        self.states.get(&current).map_or(false, |n| n.is_accepting())
     }
 }

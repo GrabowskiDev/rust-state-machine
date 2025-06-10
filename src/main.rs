@@ -1,24 +1,12 @@
 use eframe::egui;
 use std::collections::HashMap;
 
-struct StateMachine {
-    transitions: HashMap<(String, char), String>,
-    start_state: String,
-    accept_states: Vec<String>,
-}
+mod elements;
+mod automats;
 
-impl StateMachine {
-    fn run(&self, input: &str) -> bool {
-        let mut current_state = self.start_state.clone();
-        for symbol in input.chars() {
-            match self.transitions.get(&(current_state.clone(), symbol)) {
-                Some(next_state) => current_state = next_state.clone(),
-                None => return false,
-            }
-        }
-        self.accept_states.contains(&current_state)
-    }
-}
+use elements::Alphabet::Alphabet;
+use elements::Node::Node;
+use automats::DAS::DAS;
 
 struct MyApp {
     num_rows: usize,
@@ -33,11 +21,11 @@ struct MyApp {
 
 impl Default for MyApp {
     fn default() -> Self {
-        let num_columns = 2; // Minimum 2 columns for alphabet and one for states
-        let num_rows = 2; // Minimum 2 rows for states and one for alphabet
+        let num_columns = 2;
+        let num_rows = 2;
         Self {
-            num_rows: 2,
-            num_columns: 2,
+            num_rows,
+            num_columns,
             alphabet_cells: vec!["a".to_string(); num_columns - 1],
             state_names: vec!["q0".to_string(); num_rows - 1],
             transitions: vec![vec!["".to_string(); num_columns - 1]; num_rows - 1],
@@ -51,7 +39,6 @@ impl Default for MyApp {
 impl eframe::App for MyApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ctx, |ui| {
-            // Obsługa dodawania/odejmowania kolumn i wierszy
             if ui.button("Dodaj znak alfabetu").clicked() {
                 self.num_columns += 1;
                 self.alphabet_cells.push("".to_string());
@@ -79,20 +66,18 @@ impl eframe::App for MyApp {
                 self.accepting_states.pop();
             }
 
-            // Wyświetlanie siatki
             let grid_size = egui::vec2(60.0 * self.num_columns as f32, 60.0 * self.num_rows as f32);
             ui.allocate_ui(grid_size, |ui| {
                 egui::Grid::new("my_grid")
                     .min_col_width(60.0)
                     .show(ui, |ui| {
                         for row in 0..self.num_rows {
-                            for col in 0..=self.num_columns { // +1 kolumna na checkbox
+                            for col in 0..=self.num_columns {
                                 if row == 0 && col == 0 {
                                     ui.label("Akcept.");
                                 } else if row == 0 && col == 1 {
                                     ui.label("Stany");
                                 } else if row == 0 {
-                                    // Edytowalny znak alfabetu
                                     let cell = &mut self.alphabet_cells[col - 2];
                                     if ui.text_edit_singleline(cell).changed() {
                                         if cell.chars().count() > 1 {
@@ -101,13 +86,10 @@ impl eframe::App for MyApp {
                                         }
                                     }
                                 } else if col == 0 {
-                                    // Checkbox akceptujący
                                     ui.checkbox(&mut self.accepting_states[row - 1], "");
                                 } else if col == 1 {
-                                    // Edytowalna nazwa stanu
                                     ui.text_edit_singleline(&mut self.state_names[row - 1]);
                                 } else {
-                                    // Edytowalne przejście
                                     ui.text_edit_singleline(&mut self.transitions[row - 1][col - 2]);
                                 }
                             }
@@ -121,35 +103,39 @@ impl eframe::App for MyApp {
                 ui.label("Ciąg wejściowy:");
                 ui.text_edit_singleline(&mut self.input_string);
                 if ui.button("Sprawdź").clicked() {
-                    let mut names_accept_states = vec![];
-                    
-                    // Zbieranie nazw stanów akceptujących
-                    for( i, &accepting) in self.accepting_states.iter().enumerate() {
-                        if accepting {
-                            names_accept_states.push(self.state_names[i].clone());
-                        }
-                    };
-                    
-                    let alphabet: Vec<char> = self.alphabet_cells.iter().filter_map(|s| s.chars().next()).collect();
-                    let mut transitions_ready = HashMap::new();
-                    
-                    // Przygotowanie przejść
-                    for(i, name) in self.transitions.iter().enumerate(){
-                        for(j, transition) in name.iter().enumerate() {
-                            if !transition.is_empty() && j < alphabet.len() {
-                                transitions_ready.insert((self.state_names[i].clone(), alphabet[j]), transition.clone());
-                            }
+                    // 1. Budowa alfabetu
+                    let mut alphabet = Alphabet::new();
+                    for s in &self.alphabet_cells {
+                        if let Some(c) = s.chars().next() {
+                            alphabet.add(c);
                         }
                     }
-                    
-                    //TODO: CZEMU UZYWAMY STATEMACHINE ZDEFINIOWANEJ TUTAJ (na górze pliku) 
-                    //TODO: A NIE NASZEJ? XD
-                    let sm = StateMachine {
-                        transitions: transitions_ready,
-                        start_state: self.state_names.get(0).cloned().unwrap_or_default(),
-                        accept_states: names_accept_states, // uzupełnij według potrzeb
-                    };
-                    self.result = Some(sm.run(&self.input_string));
+
+                    // 2. Budowa stanów
+                    let mut nodes = vec![];
+                    for (i, name) in self.state_names.iter().enumerate() {
+                        let mut node = Node::new(name, self.accepting_states[i]);
+                        for (j, cell) in self.transitions[i].iter().enumerate() {
+                            if !cell.is_empty() {
+                                if let Some(symbol) = self.alphabet_cells[j].chars().next() {
+                                    node.add_connection(symbol, cell);
+                                }
+                            }
+                        }
+                        nodes.push(node);
+                    }
+
+                    // 3. Budowa DAS
+                    let mut das = DAS::new(alphabet);
+                    for node in nodes {
+                        das.add_state(node);
+                    }
+                    if let Some(start) = self.state_names.get(0) {
+                        das.set_start_state(start);
+                    }
+
+                    // 4. Sprawdzenie ciągu
+                    self.result = Some(das.process(&self.input_string));
                 }
             });
             if let Some(result) = self.result {

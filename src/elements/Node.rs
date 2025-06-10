@@ -1,27 +1,34 @@
-mod elements;
-
-use std::ascii::Char;
 use std::collections::HashMap;
 
-struct Node{
-    name: str,
-    connections: HashMap<char, Node>,
+#[derive(Clone)]
+pub struct Node {
+    name: String,
+    connections: HashMap<char, String>, // przechowuj nazwy stanów, nie Node
     accepting: bool,
 }
 
 impl Node {
-    fn next(&self, character: &char) -> Node {
-        &self.connections.get(&character)
+    pub fn new(name: &str, accepting: bool) -> Self {
+        Self {
+            name: name.to_string(),
+            connections: HashMap::new(),
+            accepting,
+        }
     }
 
-    fn get_connections(&self) -> HashMap<char, Node> {
+    pub fn add_connection(&mut self, symbol: char, state_name: &str) {
+        self.connections.insert(symbol, state_name.to_string());
+    }
+
+    pub fn get_connections(&self) -> &HashMap<char, String> {
         &self.connections
     }
 
-    fn get_name(&self) -> str {
-        &name
+    pub fn get_name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn is_accepting(&self) -> bool {
+        self.accepting
     }
 }
-
-// Node current_
-// current_ = current_.next("d")
