@@ -1,13 +1,12 @@
 use eframe::egui;
-use std::collections::HashMap;
 
 mod elements;
 mod automats;
 
 use elements::Alphabet::Alphabet;
-use elements::Node::Node;
+use elements::Node::{DASNode, ENASNode};
 use automats::DAS::DAS;
-use automats::ENAS::{ENAS, ENASNode};
+use automats::ENAS::ENAS;
 
 #[derive(PartialEq)]
 enum AutomatType {
@@ -145,6 +144,7 @@ impl eframe::App for MyApp {
 
                     match self.automat_type {
                         AutomatType::DAS => {
+
                             // 1. Budowa alfabetu
                             let mut alphabet = Alphabet::new();
                             for s in &self.alphabet_cells {
@@ -156,7 +156,7 @@ impl eframe::App for MyApp {
                             // 2. Budowa stanów
                             let mut nodes = vec![];
                             for (i, name) in self.state_names.iter().enumerate() {
-                                let mut node = Node::new(name, self.accepting_states[i]);
+                                let mut node = DASNode::new(name, self.accepting_states[i]);
                                 for (j, cell) in self.transitions[i].iter().enumerate().take(self.num_columns - 1) {
                                     if !cell.is_empty() {
                                         if let Some(symbol) = self.alphabet_cells[j].chars().next() {
@@ -178,6 +178,13 @@ impl eframe::App for MyApp {
 
                             // --- WALIDACJA DAS ---
                             let mut errors = das.validate();
+
+                            // Sprawdź, czy pola na znaki alfabetu nie są puste
+                            for (i, s) in self.alphabet_cells.iter().enumerate() {
+                                if s.trim().is_empty() {
+                                    errors.push(format!("Pole na znak alfabetu w kolumnie {} jest puste.", i + 1));
+                                }
+                            }
 
                             // Sprawdź, czy ciąg wejściowy zawiera tylko znaki z alfabetu
                             for c in self.input_string.chars() {
@@ -254,6 +261,13 @@ impl eframe::App for MyApp {
 
                             // --- WALIDACJA ENAS ---
                             let mut errors = enas.validate();
+
+                            // Sprawdź, czy pola na znaki alfabetu nie są puste
+                            for (i, s) in self.alphabet_cells.iter().enumerate() {
+                                if s.trim().is_empty() {
+                                    errors.push(format!("Pole na znak alfabetu w kolumnie {} jest puste.", i + 1));
+                                }
+                            }
 
                             // Sprawdź, czy ciąg wejściowy zawiera tylko znaki z alfabetu
                             for c in self.input_string.chars() {

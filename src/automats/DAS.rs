@@ -1,10 +1,11 @@
 use crate::elements::Alphabet::Alphabet;
-use crate::elements::Node::Node;
+use crate::elements::Node::{NodeBase, DASNode};
 use std::collections::{HashMap, HashSet};
+
 
 pub struct DAS {
     pub(crate) alphabet: Alphabet,
-    states: HashMap<String, Node>,
+    states: HashMap<String, DASNode>,
     start_state: String,
 }
 
@@ -17,7 +18,7 @@ impl DAS {
         }
     }
 
-    pub fn add_state(&mut self, node: Node) {
+    pub fn add_state(&mut self, node: DASNode) {
         let name = node.get_name().to_string();
         self.states.insert(name, node);
     }

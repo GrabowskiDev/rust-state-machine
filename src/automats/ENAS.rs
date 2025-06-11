@@ -1,44 +1,11 @@
 use crate::elements::Alphabet::Alphabet;
-use crate::elements::Node::Node;
+use crate::elements::Node::{NodeBase, ENASNode};
 use std::collections::{HashMap, HashSet, VecDeque};
 
 pub struct ENAS {
     pub(crate) alphabet: Alphabet,
     states: HashMap<String, ENASNode>,
     start_state: String,
-}
-
-#[derive(Clone)]
-pub struct ENASNode {
-    name: String,
-    connections: HashMap<char, Vec<String>>,
-    accepting: bool,
-}
-
-impl ENASNode {
-    pub fn new(name: &str, accepting: bool) -> Self {
-        Self {
-            name: name.to_string(),
-            connections: HashMap::new(),
-            accepting,
-        }
-    }
-
-    pub fn add_connection(&mut self, symbol: char, state_names: Vec<String>) {
-        self.connections.insert(symbol, state_names);
-    }
-
-    pub fn get_connections(&self) -> &HashMap<char, Vec<String>> {
-        &self.connections
-    }
-
-    pub fn get_name(&self) -> &str {
-        &self.name
-    }
-
-    pub fn is_accepting(&self) -> bool {
-        self.accepting
-    }
 }
 
 impl ENAS {
